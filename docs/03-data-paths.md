@@ -205,3 +205,146 @@ chrX copy, and while the calls cover the chrY side, its answers read absent.
 
 Anything still left at several places lists nothing. Read each place through
 `positions/` or `regions/` instead.
+
+## Health records
+
+[13-health-summary](../apps/13-health-summary) reads the following health
+paths. A `+` marks a grantable directory; each grant includes its descendants.
+
+```text
+v1/health/
+  kinds/                       address kinds directly; this lists nothing
+    <kind>/ +
+      name
+      entries
+      latest/
+        value
+        unit
+        time
+  clinical/
+    Observation/ +
+      entries
+  conditions/
+    active/ +
+      <kind>/
+        name
+        onset
+  medications/
+    current/ +
+      <kind>/
+        name
+        since
+  signals/ +
+    <id>/
+      info
+      samples
+```
+
+The app requires `v1/health/kinds/loinc-8867-4` for heart rate,
+`loinc-29463-7` for body weight, `loinc-8480-6` for systolic blood pressure
+and `loinc-8462-4` for diastolic blood pressure. Each uses the same
+`v1/health/kinds/` prefix. It also requires
+`v1/health/clinical/Observation` and `v1/health/conditions/active`.
+`v1/health/medications/current` and `v1/health/signals` are optional.
+
+Health grants are available once health data has been imported. A valid kind
+with no records is absent when read, even when the required grant is
+available. An app reports that as no data. Other read errors are failures.
+An absent optional view does not distinguish a declined grant from missing
+data. The local runner requires a fixture directory for every required grant.
+
+### Kind slugs
+
+A kind identifies a code and its coding system. The code keeps its spelling
+and uses only ASCII letters, digits, `.`, `_` and `-`. Empty codes and codes
+with any other character have no kind path. The recognized systems use these
+prefixes:
+
+| System               | Slug            |
+| -------------------- | --------------- |
+| LOINC                | `loinc-<code>`  |
+| SNOMED CT            | `snomed-<code>` |
+| RxNorm               | `rxnorm-<code>` |
+| ATC                  | `atc-<code>`    |
+| ICD-10 and ICD-10-CM | `icd10-<code>`  |
+| MDC                  | `mdc-<code>`    |
+
+Other systems use `sys-<hash>-<code>`, where `hash` is the first eight
+lowercase hexadecimal digits of SHA-256 over the system URI's UTF-8 bytes.
+For example, heart rate is `loinc-8867-4`. Address the kind directly rather
+than listing `kinds/`.
+
+### Measurements
+
+`name` is the Ark's terminology name, or the system label and code for an
+unknown code. It is UTF-8 text with no trailing newline, absent (ENOENT)
+when the value is unknown or empty.
+
+`entries` is UTF-8 TSV with this header:
+
+```text
+time	value	unit	source
+```
+
+The four fields are separated by tabs, with one newline after the header
+and each row. `time` is an ISO 8601 UTC timestamp. `value` is a number,
+code, text result or status. `unit` is the recorded unit. A missing time
+or unit is an empty field. `source` is an opaque identifier. Rows are
+ordered by time, then record identity, with unknown times first. Different
+sources and units may appear in the same file, so an app must not merge
+numeric ranges across units without conversion.
+
+`latest/value` holds the latest result or clinical status, `latest/unit`
+its physical unit, and `latest/time` its time in ISO 8601 UTC. Each is UTF-8
+text with no trailing newline, absent (ENOENT) when the value is unknown
+or empty. `latest/` lists each field only when its value is known and
+nonempty, and is absent without readings. The latest reading is the last
+row ordered by time then identity. The app reads `name`, `entries`,
+`latest/value` and `latest/unit`; it gets its first and last times from
+`entries`.
+
+### Observations and recorded lists
+
+`clinical/Observation/entries` is UTF-8 NDJSON, one JSON object per row
+with a newline after each row, ordered by clinical time then identity.
+It is absent without clinical records of this type. Each object has
+`resourceType = "Observation"` and an `id` of 16 lowercase hexadecimal
+digits. It contains selected structured FHIR fields, such as `category`,
+`code`, `effectiveDateTime` and result fields. It is not a complete FHIR
+resource. The app counts `category[].coding[]` by system and code, counts
+duplicate codings once per record, and ignores fields it does not use.
+Without records, this directory is absent.
+
+`conditions/active` and `medications/current` list one directory per
+qualifying kind. Each `name` is the Ark's terminology name, or the system
+label and code for an unknown code. `onset` and `since` hold the start or
+onset time in ISO 8601 UTC. These files are UTF-8 text with no trailing
+newline, absent (ENOENT) when the value is unknown or empty. The directory
+lists only known, nonempty values. The app reads only the names and sorts
+them for its report.
+
+The active condition list includes a code when its newest record has status
+`active`, `recurrence` or `relapse`, without an abatement. The current
+medication list includes a code when its newest request or statement has
+status `active`, `intended` or `on-hold`. These lists describe recorded
+statuses; they do not establish a diagnosis or whether a medication is
+being taken. An empty list is a readable directory without children.
+
+### ECG recordings
+
+`signals` lists one directory per recording, named with 16 lowercase
+hexadecimal digits. `info` holds one UTF-8 JSON object with no trailing newline.
+Its fields are `system`, `code`, `start`, `period`, `channels`, `unit` and
+`sample_count`. `start` is a UTC timestamp or `null`; `period` is the
+interval in milliseconds between sample rows; `sample_count` counts rows,
+not individual channel values.
+
+`samples` is UTF-8 TSV without a header, with one row per sample instant
+and one column per channel. Values are already in physical units. The FHIR
+markers `E`, `L` and `U` represent an error, a value below a limit and a
+value above a limit. There is one newline after each row.
+
+`info` and `samples` are absent without a supported recording. The app
+checks the row and channel counts and computes length as
+`sample_count * period / 1000` seconds. It includes marker rows in that
+length and does not interpret the waveform.

@@ -99,6 +99,7 @@ and a full app turns the same read into a report. Each row is a folder under
 | `12-pigment-variants` | gathering six genotypes into an output, with a typed ordering input | Rust |
 | `12-eye-color-model` | turning an untyped variant input into IrisPlex probabilities | Rust |
 | `12-eye-color` | composing both apps with digest pins and input bindings | Rust |
+| `13-health-summary` | summarizing recorded measurements, observations, conditions and optional medications and ECGs | Rust |
 
 ## Documentation
 

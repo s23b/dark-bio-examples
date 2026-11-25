@@ -1,16 +1,17 @@
 # Fixtures
 
 These files stand in for what an Ark mounts, so `make run` works without one.
-The default root models one invented genome on GRCh38.p14. Its 37-record small
-variant file agrees with every rsID, gene and region answer beside it. The
-genotypes, copy numbers and structural variant calls are made up, while the
-coordinates, reference alleles and sequences are public data.
+The default root models one invented genome on GRCh38.p14 and invented health
+records. Its 37-record small variant file agrees with every rsID, gene and
+region answer beside it. The genotypes, copy numbers and structural variant
+calls are made up, while the coordinates, reference alleles and sequences
+are public data.
 
 ## Roots
 
 | Root | Used by | What it models |
 | :-- | :-- | :-- |
-| `fixtures` | every app | typical calls, including phased, haploid and reference calls, no copies of UGT2B17, and the ACE insertion on both copies |
+| `fixtures` | every app | typical calls, including phased, haploid and reference calls, no copies of UGT2B17, the ACE insertion on both copies, and the health records below |
 | `fixtures/no-call` | the rsID, copy number and structural apps | a no-call, `./.`, at every panel variant, a copy number segment without a count, and the ACE insertion with a copy uncalled |
 | `fixtures/unanswered` | the rsID apps | no genotypes at the panel variants, as at reference sites in a variants-only call file, and no copy number or structural variant upload, so the `07` and `08` apps never start |
 
@@ -26,6 +27,46 @@ make run APP=04-cilantro-mini-rust FIXTURES=fixtures/no-call
 The two smaller roots hold only the data those apps need, plus the reference
 build they name coordinates on, so any other app stops at its missing grants
 there.
+
+## Health records
+
+`v1/health/` holds handwritten, invented records for
+[13-health-summary](../apps/13-health-summary). The four measurement kinds
+contain 10 entries from two opaque sources. They include a year boundary,
+two heart rate readings at the same time, body weight in kilograms and
+pounds, and systolic and diastolic blood pressure in `mm[Hg]`.
+
+Four Observation records exercise repeated category codes, multiple
+categories and an uncategorized result. The condition list holds Asthma
+(`snomed-195967001`) and Essential hypertension (`snomed-59621000`). The
+medication list holds Lisinopril (`rxnorm-29046`) and Simvastatin 20 MG oral
+tablet (`rxnorm-312961`). Two short ECGs have 3 channels over 4 sample rows
+at 10ms intervals, and 1 channel over 3 sample rows at 2ms intervals.
+One sample uses the `E` error marker. Their
+reported lengths are 0.04s and 0.006s. These samples are invented numbers,
+not physiological waveforms.
+
+The default root supplies all required and optional health grants.
+`OPTIONAL=off` leaves medications and ECGs unmounted. The `no-call` and
+`unanswered` roots contain no health paths, so the runner stops at a missing
+required grant before this app's processing pass.
+
+On an Ark with imported health data, a required kind can still read as
+absent and the app reports no data. The local runner cannot represent that
+with a missing required directory, because it rejects the grant before
+starting the app. An empty mounted directory can model an absent `entries`
+file when running the module directly.
+
+Health value files hold exactly their value with no trailing newline,
+including `name`, `latest/value`, `latest/unit`, `latest/time`, `onset`,
+`since` and a signal's `info`. An unknown or empty value is absent (ENOENT)
+and its directory does not list it. Measurement TSV keeps one newline
+after the header and each row. Observation NDJSON and signal sample TSV
+keep one newline after each row. Measurement TSV uses `time`, `value`,
+`unit`, `source` in that order; signal JSON uses `period` in milliseconds. The
+[health path guide](../docs/03-data-paths.md#health-records) describes these
+formats. Measurements, dates, source identifiers and recording identifiers
+are invented. Code identifiers and unit spellings follow the interface.
 
 ## Eye color panel
 
